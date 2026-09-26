@@ -5,7 +5,7 @@ import requests
 
 # Target configuration
 PRODUCT_URL = "https://blinkit.com/prn/x/prid/1404276"  # Replace with actual product URL
-CHECK_INTERVAL_SECONDS = 10  # 5 minutes
+CHECK_INTERVAL_SECONDS = 10  # 10 seconds
 
 # Set dark store coordinates (e.g. your delivery location)
 LATITUDE = 
