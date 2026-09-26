@@ -8,12 +8,12 @@ PRODUCT_URL = "https://blinkit.com/prn/x/prid/1404276"  # Replace with actual pr
 CHECK_INTERVAL_SECONDS = 10  # 5 minutes
 
 # Set dark store coordinates (e.g. your delivery location)
-LATITUDE = 12.8988
-LONGITUDE = 77.5323
+LATITUDE = 
+LONGITUDE = 
 
 # Telegram Bot Credentials (optional - set as env vars or replace directly)
-TELEGRAM_BOT_TOKEN = os.getenv("8308862718:AAEnWouMwTz5eYMzpukzEBfLAYju5eqyjts")
-TELEGRAM_CHAT_ID = os.getenv("2065486159")
+TELEGRAM_BOT_TOKEN = os.getenv("")
+TELEGRAM_CHAT_ID = os.getenv("")
 
 
 def send_alert(message: str):
