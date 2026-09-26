@@ -1,101 +1,138 @@
+import asyncio
 import os
 import time
-from playwright.sync_api import sync_playwright
+from playwright.async_api import async_playwright
 import requests
 
-# Target configuration
-PRODUCT_URL = "https://blinkit.com/prn/x/prid/1404276"  # Replace with actual product URL
-CHECK_INTERVAL_SECONDS = 10  # 10 seconds
+# ---------------------------------------------------------------------------
+# TARGET CONFIGURATION
+# ---------------------------------------------------------------------------
+PRODUCT_URL = "your blinit link"
+CHECK_INTERVAL_SECONDS = 10  # How often to check stock (seconds)
 
-# Set dark store coordinates (e.g. your delivery location)
-LATITUDE = 
-LONGITUDE = 
+# ALERT COOLDOWN CONFIGURATION:
+# Change this value to adjust Telegram notification frequency when an item stays in stock.
+# Examples: 60 = 1 minute | 300 = 5 minutes | 600 = 10 minutes | 0 = Every check (10s)
+ALERT_COOLDOWN_SECONDS = 300
 
-# Telegram Bot Credentials (optional - set as env vars or replace directly)
-TELEGRAM_BOT_TOKEN = os.getenv("")
-TELEGRAM_CHAT_ID = os.getenv("")
+# LOCATIONS TO TRACK (Coordinates)
+LOCATIONS = [
+    {
+        "name": "location 1",
+        "latitude": ,
+        "longitude": 
+    },
+    {
+        "name": "location 2",
+        "latitude": ,
+        "longitude": 
+    }
+]
+
+# ---------------------------------------------------------------------------
+# TELEGRAM BOT CREDENTIALS
+# ---------------------------------------------------------------------------
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+
+# Dictionary to keep track of the last notification timestamp per location
+last_alert_times = {loc["name"]: 0 for loc in LOCATIONS}
 
 
 def send_alert(message: str):
-  """Sends an instant alert via Telegram Bot."""
-  if "YOUR_BOT_TOKEN" in TELEGRAM_BOT_TOKEN:
-    print(f"[ALERT] {message}")
-    return
-  url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-  payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "Markdown"}
-  try:
-    requests.post(url, json=payload, timeout=10)
-  except Exception as e:
-    print(f"Failed to send alert: {e}")
+    """Sends an instant alert via Telegram Bot."""
+    if not TELEGRAM_BOT_TOKEN or "YOUR_BOT_TOKEN" in TELEGRAM_BOT_TOKEN:
+        print(f"[ALERT] {message}")
+        return
+    
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": message,
+        "parse_mode": "Markdown"
+    }
+    try:
+        res = requests.post(url, json=payload, timeout=10)
+        res.raise_for_status()
+    except Exception as e:
+        print(f"Failed to send Telegram alert: {e}")
 
 
-def check_stock_status():
-  with sync_playwright() as p:
-    browser = p.chromium.launch(headless=True)
-    # Emulate browser context with exact geolocation permissions
-    context = browser.new_context(
-        geolocation={"latitude": LATITUDE, "longitude": LONGITUDE},
+async def check_location_stock(browser, loc_info):
+    """Creates a browser context with specific geolocation and checks stock."""
+    context = await browser.new_context(
+        geolocation={"latitude": loc_info["latitude"], "longitude": loc_info["longitude"]},
         permissions=["geolocation"],
         user_agent=(
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
             "AppleWebKit/537.36 (KHTML, like Gecko) "
             "Chrome/124.0.0.0 Safari/537.36"
-        ),
+        )
     )
-    page = context.new_page()
-
+    
+    page = await context.new_page()
+    timestamp = time.strftime('%X')
+    loc_name = loc_info["name"]
+    
     try:
-      page.goto(PRODUCT_URL, wait_until="domcontentloaded", timeout=60000)
-      page.wait_for_timeout(5000)  # Wait 5 seconds for React components to render 
+        await page.goto(PRODUCT_URL, wait_until="domcontentloaded", timeout=60000)
+        await page.wait_for_timeout(5000)  # Wait for React elements to load
 
-      # Scan page content for stock indicators
-      body_text = page.locator("body").inner_text().lower()
+        body_text = (await page.locator("body").inner_text()).lower()
 
-      # Blinkit UI indicators:
-      # Out of stock/Coming soon items typically display "out of stock", "coming soon", or "sold out"
-      is_unavailable = any(
-          phrase in body_text
-          for phrase in [
-              "out of stock",
-              "coming soon",
-              "currently unavailable",
-              "sold out",
-          ]
-      )
-
-      # Check if actionable "ADD" or "Add to Cart" button exists and is enabled
-      add_button = page.locator(
-          'button:has-text("ADD"), div:has-text("ADD")'
-      ).first
-
-      if not is_unavailable and add_button.is_visible():
-        print(f"[{time.strftime('%X')}] IN STOCK!")
-        send_alert(
-            f"🚨 *HOT WHEELS IN STOCK!* 🚨\n\nLink: {PRODUCT_URL}\nCheck out immediately!"
+        is_unavailable = any(
+            phrase in body_text
+            for phrase in [
+                "out of stock",
+                "coming soon",
+                "currently unavailable",
+                "sold out",
+            ]
         )
-        return True
-      else:
-        print(
-            f"[{time.strftime('%X')}] Item still unavailable (Out of stock /"
-            " Coming soon)."
-        )
-        return False
+
+        add_button = page.locator('button:has-text("ADD"), div:has-text("ADD")').first
+
+        if not is_unavailable and await add_button.is_visible():
+            print(f"[{timestamp}] 🚨 IN STOCK at {loc_name}!")
+            
+            # Check if cooldown duration has passed before sending another Telegram alert
+            current_time = time.time()
+            if current_time - last_alert_times[loc_name] >= ALERT_COOLDOWN_SECONDS:
+                send_alert(
+                    f"🚨 *ITEM IN STOCK!* 🚨\n\n"
+                    f"*Location:* {loc_name}\n"
+                    f"*Link:* {PRODUCT_URL}\n"
+                    f"Check out immediately!"
+                )
+                last_alert_times[loc_name] = current_time
+            else:
+                print(f"[{timestamp}] Telegram alert suppressed for {loc_name} (cooldown active).")
+
+        else:
+            print(f"[{timestamp}] Unavailable at {loc_name}")
 
     except Exception as err:
-      print(f"[{time.strftime('%X')}] Encountered an error: {err}")
-      return False
+        print(f"[{timestamp}] Error checking {loc_name}: {err}")
     finally:
-      browser.close()
+        await context.close()
 
 
-def run_monitor():
-  print("Starting Blinkit stock tracker (every 5 minutes)...")
-  while True:
-    in_stock = check_stock_status()
-    if in_stock:
-      break
-    time.sleep(CHECK_INTERVAL_SECONDS)
+async def main():
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        print("Starting continuous multi-location stock tracker...")
+        print(f"Checking every {CHECK_INTERVAL_SECONDS}s | Alert cooldown: {ALERT_COOLDOWN_SECONDS}s")
+        print("Press Ctrl+C to stop.\n")
+        
+        while True:
+            # Check all locations concurrently in parallel
+            tasks = [check_location_stock(browser, loc) for loc in LOCATIONS]
+            await asyncio.gather(*tasks)
+            await asyncio.sleep(CHECK_INTERVAL_SECONDS)
 
 
 if __name__ == "__main__":
-  run_monitor()
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\nTracker stopped by user.")
