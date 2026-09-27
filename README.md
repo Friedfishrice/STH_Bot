@@ -1,4 +1,4 @@
-**Disclaimer
+**Disclaimer: 
 This tool is strictly for personal educational and hobby tracking purposes. Please respect platform policies and avoid aggressive polling intervals.**
 
 An asynchronous, headless inventory monitor built with Python and Playwright to track hyper-local stock drops on Blinkit across multiple dark store catchment zones simultaneously. Features DOM isolation against recommendation carousels and instant Telegram webhook alerts.
@@ -90,5 +90,5 @@ nohup python tracker.py > tracker.log 2>&1 &
 Why Playwright Instead of Raw Requests?
 Blinkit's quick-commerce storefront relies on dynamic client-side hydration and geo-derived session states. Scraping static HTML misses dynamically evaluated stock tags, while calling internal backend APIs directly requires maintaining session cookies and reverse-engineered headers. Playwright executes the page directly in headless Chromium with high reliability.
 
-**Disclaimer
+**Disclaimer: 
 This tool is strictly for personal educational and hobby tracking purposes. Please respect platform policies and avoid aggressive polling intervals.**
